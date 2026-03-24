@@ -30,7 +30,7 @@ from rlinf.envs.libero.utils import (
     get_libero_wrist_image,
     quat2axisangle,
 )
-from rlinf.envs.libero.venv import ReconfigureSubprocEnv
+from rlinf.envs.libero.venv import ReconfigureDummyEnv, ReconfigureSubprocEnv
 from rlinf.envs.utils import (
     list_of_dict_to_dict_of_list,
     put_info_on_image,
@@ -86,7 +86,10 @@ class LiberoEnv(gym.Env):
 
     def _init_env(self):
         env_fns = self.get_env_fns()
-        self.env = ReconfigureSubprocEnv(env_fns)
+        if bool(getattr(self.cfg, "debug_use_dummy_vector_env", False)):
+            self.env = ReconfigureDummyEnv(env_fns)
+        else:
+            self.env = ReconfigureSubprocEnv(env_fns)
 
     def get_env_fns(self):
         env_fn_params = self.get_env_fn_params()

@@ -25,6 +25,8 @@ from libero.libero.envs import OffScreenRenderEnv
 from rlinf.envs.venv import (
     BaseVectorEnv,
     CloudpickleWrapper,
+    DummyEnvWorker,
+    DummyVectorEnv,
     EnvWorker,
     ShArray,
     SubprocEnvWorker,
@@ -298,6 +300,32 @@ class ReconfigureSubprocEnv(SubprocVectorEnv):
     def __init__(self, env_fns: list[Callable[[], gym.Env]], **kwargs: Any) -> None:
         def worker_fn(fn: Callable[[], gym.Env]) -> ReconfigureSubprocEnvWorker:
             return ReconfigureSubprocEnvWorker(fn, share_memory=False)
+
+        BaseVectorEnv.__init__(self, env_fns, worker_fn, **kwargs)
+
+    def reconfigure_env_fns(self, env_fns, id=None):
+        self._assert_is_not_closed()
+        id = self._wrap_id(id)
+        if self.is_async:
+            self._assert_id(id)
+
+        for j, i in enumerate(id):
+            self.workers[i].reconfigure_env_fn(env_fns[j])
+
+
+class ReconfigureDummyEnvWorker(DummyEnvWorker):
+    def reconfigure_env_fn(self, env_fn_param):
+        self.env.close()
+        seed = env_fn_param.pop("seed")
+        env = OffScreenRenderEnv(**env_fn_param)
+        env.seed(seed)
+        self.env = env
+
+
+class ReconfigureDummyEnv(DummyVectorEnv):
+    def __init__(self, env_fns: list[Callable[[], gym.Env]], **kwargs: Any) -> None:
+        def worker_fn(fn: Callable[[], gym.Env]) -> ReconfigureDummyEnvWorker:
+            return ReconfigureDummyEnvWorker(fn)
 
         BaseVectorEnv.__init__(self, env_fns, worker_fn, **kwargs)
 
