@@ -14,6 +14,7 @@
 
 import atexit
 import gc
+import hashlib
 import os
 import random
 import sys
@@ -48,6 +49,24 @@ def move_to_device_if_tensor(device, item):
 
 cuda_dict = partial(apply_func_to_dict, partial(move_to_device_if_tensor, "cuda"))
 cpu_dict = partial(apply_func_to_dict, partial(move_to_device_if_tensor, "cpu"))
+
+
+def get_model_weights_id(model) -> str:
+    """Build a lightweight fingerprint for the current model weights."""
+    hasher = hashlib.sha1()
+    state_dict = model.state_dict()
+    for name in sorted(state_dict.keys()):
+        tensor = state_dict[name]
+        hasher.update(name.encode("utf-8"))
+        if torch.is_tensor(tensor):
+            hasher.update(str(tuple(tensor.shape)).encode("utf-8"))
+            hasher.update(str(tensor.dtype).encode("utf-8"))
+            hasher.update(str(tensor.device.type).encode("utf-8"))
+            sample = tensor.detach().reshape(-1)[:16].to(device="cpu", copy=True)
+            hasher.update(sample.numpy().tobytes())
+        else:
+            hasher.update(repr(tensor).encode("utf-8"))
+    return hasher.hexdigest()[:12]
 
 
 def retrieve_model_state_dict_in_cpu(model, offloaded_buffer=None):
