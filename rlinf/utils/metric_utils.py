@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+import time
 
 import torch
 import torch.distributed
@@ -209,3 +210,40 @@ def compute_time_decay_weights(
     weights = torch.maximum(weights, weight_floor)
 
     return weights * mask_float
+
+
+def print_metrics_table(
+    step: int,
+    max_steps: int,
+    start_time: float,
+    metrics: dict,
+    rank: int = 0,
+):
+    """Lightweight progress printer used by local debug scripts."""
+    if rank != 0:
+        return
+
+    elapsed = max(0.0, time.time() - start_time)
+    metrics_items = []
+    for key in sorted(metrics.keys()):
+        value = metrics[key]
+        if isinstance(value, torch.Tensor):
+            if value.numel() == 1:
+                value = value.item()
+            else:
+                value = value.detach().float().mean().item()
+        if isinstance(value, float):
+            metrics_items.append(f"{key}={value:.6g}")
+        else:
+            metrics_items.append(f"{key}={value}")
+
+    metrics_str = " ".join(metrics_items)
+    print(
+        f"[step {step + 1}/{max_steps}] elapsed={elapsed:.1f}s {metrics_str}",
+        flush=True,
+    )
+
+
+def print_mertrics_table(*args, **kwargs):
+    """Backward-compatible alias for the historical typo."""
+    return print_metrics_table(*args, **kwargs)
