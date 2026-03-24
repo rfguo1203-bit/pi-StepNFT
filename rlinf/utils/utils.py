@@ -14,10 +14,10 @@
 
 import atexit
 import gc
-import hashlib
 import os
 import random
 import sys
+import uuid
 from contextlib import contextmanager
 from functools import partial, wraps
 from typing import Callable, Literal, Optional
@@ -51,22 +51,29 @@ cuda_dict = partial(apply_func_to_dict, partial(move_to_device_if_tensor, "cuda"
 cpu_dict = partial(apply_func_to_dict, partial(move_to_device_if_tensor, "cpu"))
 
 
-def get_model_weights_id(model) -> str:
-    """Build a lightweight fingerprint for the current model weights."""
-    hasher = hashlib.sha1()
-    state_dict = model.state_dict()
-    for name in sorted(state_dict.keys()):
-        tensor = state_dict[name]
-        hasher.update(name.encode("utf-8"))
-        if torch.is_tensor(tensor):
-            hasher.update(str(tuple(tensor.shape)).encode("utf-8"))
-            hasher.update(str(tensor.dtype).encode("utf-8"))
-            hasher.update(str(tensor.device.type).encode("utf-8"))
-            sample = tensor.detach().reshape(-1)[:16].to(device="cpu", copy=True)
-            hasher.update(sample.numpy().tobytes())
-        else:
-            hasher.update(repr(tensor).encode("utf-8"))
-    return hasher.hexdigest()[:12]
+def get_model_weights_id(model, k=128):
+    first_p = None
+    last_p = None
+
+    for _, p in model.named_parameters():
+        if not p.is_floating_point():
+            continue
+        if first_p is None:
+            first_p = p
+        last_p = p
+
+    if first_p is None or last_p is None:
+        return None
+
+    def tensor_fingerprint(p):
+        flat = p.detach().view(-1)
+        sample = flat[:k] if flat.numel() >= k else flat
+        return sample.to(dtype=torch.float32).cpu().numpy().tobytes()
+
+    name_bytes = tensor_fingerprint(first_p) + tensor_fingerprint(last_p)
+    name_str = name_bytes.hex()
+
+    return uuid.uuid5(uuid.NAMESPACE_DNS, name_str)
 
 
 def retrieve_model_state_dict_in_cpu(model, offloaded_buffer=None):
