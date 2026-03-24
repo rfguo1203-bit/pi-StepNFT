@@ -15,6 +15,8 @@
 from .venv import (
     BaseVectorEnv,
     CloudpickleWrapper,
+    DummyEnvWorker,
+    DummyVectorEnv,
     EnvWorker,
     ShArray,
     SubprocError,
@@ -26,6 +28,8 @@ from .venv import (
 __all__ = [
     "BaseVectorEnv",
     "CloudpickleWrapper",
+    "DummyEnvWorker",
+    "DummyVectorEnv",
     "EnvWorker",
     "ShArray",
     "SubprocError",
